@@ -1,0 +1,81 @@
+import os
+from openpyxl import load_workbook, Workbook
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+# Define the directory containing the workbooks
+directory = r'C:\Users\m1852\OneDrive\桌面\Career'
+
+# Initialize a list to store the FFO estimates for 2025
+ffo_estimates_2025 = []
+
+# Function to get the actual value of a merged cell
+def get_merged_cell_value(sheet, cell):
+    for merged_range in sheet.merged_cells.ranges:
+        if cell.coordinate in merged_range:
+            return sheet.cell(merged_range.min_row, merged_range.min_col).value
+    return cell.value
+
+# Loop through each file in the directory
+for filename in os.listdir(directory):
+    if filename.startswith('Q') and filename.endswith('.xlsx'):
+        filepath = os.path.join(directory, filename)
+        print(f'Processing file: {filename}')
+        
+        # Load the workbook and the summary_tab sheet
+        workbook = load_workbook(filepath, data_only=True)
+        if 'Summary - KPI' in workbook.sheetnames:
+            sheet = workbook['Summary - KPI']
+            
+            # Find the column labeled '2025 Estimate' in row 4 or row 5
+            column_index = None
+            for cell in sheet[4]:  # Iterate over the 4th row
+                cell_value = get_merged_cell_value(sheet, cell)
+                if cell_value and isinstance(cell_value, str):
+                    normalized_value = ' '.join(cell_value.split())
+                    if normalized_value == '2025 Estimate':
+                        column_index = cell.col_idx
+                        print(f'Found "2025 Estimate" in column: {column_index}')
+                        break
+            
+            # If the column is found, get the value from row 6 of that column
+            if column_index:
+                ffo_value = sheet.cell(row=6, column=column_index).value
+                ffo_estimates_2025.append((filename, ffo_value))
+                print(f'FFO value for 2025 in {filename}: {ffo_value}')
+            else:
+                print(f'Column "2025 Estimate" not found in {filename}')
+        else:
+            print(f'Sheet "summary_tab" not found in {filename}')
+
+# Create a new workbook and add the data
+output_wb = Workbook()
+output_ws = output_wb.active
+output_ws.title = "FFO Estimates"
+
+# Define the header
+header = ["Quarter", "2025 FFO Estimates"]
+
+# Write the header to the worksheet
+output_ws.append(header)
+
+# Write the data to the worksheet
+for i, (filename, ffo_value) in enumerate(ffo_estimates_2025, start=1):
+    quarter = f"Q{i}"
+    output_ws.append([quarter, ffo_value])
+
+# Create a table
+tab = Table(displayName="FFOEstimatesTable", ref=f"A1:B{len(ffo_estimates_2025)+1}")
+
+# Add a default style with striped rows and banded columns
+style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False,
+                       showLastColumn=False, showRowStripes=True, showColumnStripes=True)
+tab.tableStyleInfo = style
+
+# Add the table to the worksheet
+output_ws.add_table(tab)
+
+# Save the workbook
+output_filepath = r'C:\Users\m1852\OneDrive\桌面\Career\FFO_Estimates_Summary.xlsx'
+output_wb.save(output_filepath)
+
+print(f'Results saved to {output_filepath}')
